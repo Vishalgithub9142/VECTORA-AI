@@ -31,8 +31,13 @@ export const useInterview = () => {
             return response.interviewReport
         } catch (error) {
             handleAuthError(error)
-            console.error("Error generating report:", error)
-            alert(error.response?.data?.message || "Failed to generate interview report")
+            const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || "Failed to generate interview report"
+            console.error("Error generating report:", {
+                status: error.response?.status,
+                message: errorMsg,
+                fullError: error
+            })
+            alert(errorMsg)
             return null
         } finally {
             setLoading(false)

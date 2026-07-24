@@ -5,6 +5,14 @@ const api = axios.create({
     withCredentials: true 
 })
 
+// Add token to Authorization header if it exists in localStorage
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
 
 /**
  * @description Service to generate interview report based on user self description, resume and job description.
@@ -16,11 +24,8 @@ export const generateInterviewReport = async ({ jobDescription, selfDescription,
     formData.append("selfDescription", selfDescription)
     formData.append("resume", resumeFile)
 
-    const response = await api.post("/", formData, {
-        headers: {
-            "Content-Type": "multipart/form-data"
-        }
-    })
+    // Don't set Content-Type header for FormData - let axios/browser handle it
+    const response = await api.post("/", formData)
 
     return response.data
 
