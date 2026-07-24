@@ -19,7 +19,11 @@ const Home = () => {
   const handleGenerateReport = async () => {
     const resumeFile = resumeInputRef.current.files[0]
     const data = await generateReport({ jobDescription, selfDescription, resumeFile })
-    navigate(`/interview/${data._id}`)
+    
+    // Safely check if data exists before navigating
+    if (data?._id) {
+      navigate(`/interview/${data._id}`)
+    }
   }
 
   if (loading) {

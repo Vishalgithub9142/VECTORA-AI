@@ -1,13 +1,14 @@
 import { getAllInterviewReports, generateInterviewReport, getInterviewReportById, generateResumePdf } from "../services/interview.api"
 import { useContext, useEffect } from "react"
 import { InterviewContext } from "../interview.context"
-import { useParams } from "react-router"
+import { useParams, useNavigate } from "react-router"
 
 
 export const useInterview = () => {
 
     const context = useContext(InterviewContext)
     const { interviewId } = useParams()
+    const navigate = useNavigate()
 
     if (!context) {
         throw new Error("useInterview must be used within an InterviewProvider")
@@ -15,55 +16,63 @@ export const useInterview = () => {
 
     const { loading, setLoading, report, setReport, reports, setReports } = context
 
+    const handleAuthError = (error) => {
+        if (error.response?.status === 401) {
+            alert("Your session has expired. Please log in again.");
+            navigate("/login");
+        }
+    }
+
     const generateReport = async ({ jobDescription, selfDescription, resumeFile }) => {
         setLoading(true)
-        let response = null
         try {
-            response = await generateInterviewReport({ jobDescription, selfDescription, resumeFile })
+            const response = await generateInterviewReport({ jobDescription, selfDescription, resumeFile })
             setReport(response.interviewReport)
+            return response.interviewReport
         } catch (error) {
-            console.log(error)
+            handleAuthError(error)
+            console.error("Error generating report:", error)
+            alert(error.response?.data?.message || "Failed to generate interview report")
+            return null
         } finally {
             setLoading(false)
         }
-
-        return response.interviewReport
     }
 
     const getReportById = async (interviewId) => {
         setLoading(true)
-        let response = null
         try {
-            response = await getInterviewReportById(interviewId)
+            const response = await getInterviewReportById(interviewId)
             setReport(response.interviewReport)
+            return response.interviewReport
         } catch (error) {
-            console.log(error)
+            handleAuthError(error)
+            console.error("Error fetching report:", error)
+            return null
         } finally {
             setLoading(false)
         }
-        return response.interviewReport
     }
 
     const getReports = async () => {
         setLoading(true)
-        let response = null
         try {
-            response = await getAllInterviewReports()
+            const response = await getAllInterviewReports()
             setReports(response.interviewReports)
+            return response.interviewReports
         } catch (error) {
-            console.log(error)
+            handleAuthError(error)
+            console.error("Error fetching reports:", error)
+            return null
         } finally {
             setLoading(false)
         }
-
-        return response.interviewReports
     }
 
     const getResumePdf = async (interviewReportId) => {
         setLoading(true)
-        let response = null
         try {
-            response = await generateResumePdf({ interviewReportId })
+            const response = await generateResumePdf({ interviewReportId })
             const url = window.URL.createObjectURL(new Blob([ response ], { type: "application/pdf" }))
             const link = document.createElement("a")
             link.href = url
@@ -72,7 +81,9 @@ export const useInterview = () => {
             link.click()
         }
         catch (error) {
-            console.log(error)
+            handleAuthError(error)
+            console.error("Error generating PDF:", error)
+            alert("Failed to generate resume PDF")
         } finally {
             setLoading(false)
         }
