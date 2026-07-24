@@ -12,11 +12,18 @@ export const AuthProvider = ({ children })=>{
     useEffect(() => {
         const checkUser = async () => {
             try {
+                // First, restore token from localStorage if it exists
+                const storedToken = localStorage.getItem('authToken');
+                if (storedToken) {
+                    // Token is already available for the interceptor to use
+                }
+                
                 const userData = await getMe();
                 setUser(userData.user);
             } catch (error) {
                 // User not authenticated
                 console.log("No active session");
+                localStorage.removeItem('authToken');
             } finally {
                 setLoading(false);
             }

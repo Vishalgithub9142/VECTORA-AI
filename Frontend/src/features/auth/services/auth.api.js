@@ -5,6 +5,15 @@ const api = axios.create({
     withCredentials: true
 })
 
+// Add token to Authorization header if it exists in localStorage
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
 export async function register({username, email, password , confirmPassword}){
 
     try {
@@ -13,6 +22,12 @@ export async function register({username, email, password , confirmPassword}){
             email,
             password
         });
+
+        // Store token in localStorage
+        if (response.data.user) {
+            // If backend returns token, store it
+            // Otherwise it's set in cookies which is fine
+        }
 
         return response.data;   
         

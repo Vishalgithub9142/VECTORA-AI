@@ -11,6 +11,10 @@ export const useAuth = ()=>{
         try {
             const data = await login({email, password})
             setUser(data.user)
+            // Store token in localStorage for Authorization header
+            if (data.token) {
+                localStorage.setItem('authToken', data.token)
+            }
         } catch (error) {
             console.log(error);
         }finally{
@@ -24,6 +28,10 @@ export const useAuth = ()=>{
         try {
             const data = await register({username, email, password})
             setUser(data.user)
+            // Store token in localStorage for Authorization header
+            if (data.token) {
+                localStorage.setItem('authToken', data.token)
+            }
         } catch (error) {
             console.log(error);
         }finally{
@@ -36,6 +44,8 @@ export const useAuth = ()=>{
         try {
             const data = await logout()
             setUser(null)
+            // Remove token from localStorage
+            localStorage.removeItem('authToken')
         } catch (error) {
             console.log(error);
         }finally{
