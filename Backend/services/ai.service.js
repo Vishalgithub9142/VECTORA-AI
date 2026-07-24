@@ -34,13 +34,13 @@ const interviewReoprtScheme = z.object({
 
 async function generateInterviewReport({ resume, selfDescription, jobDescription }) {
 
-    const prompt = `Generate the innterview Report according to the information provided by user. 
+    const prompt = `Generate the interview Report according to the information provided by user. 
     Resume: ${resume}
     Self Description: ${selfDescription}
     Job Description: ${jobDescription}`
 
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.0-flash",
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -90,7 +90,7 @@ async function generateResumePdf({ resume, selfDescription, jobDescription }) {
                     `
 
     const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: prompt,
         config: {
             responseMimeType: "application/json",
