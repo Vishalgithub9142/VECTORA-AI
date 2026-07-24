@@ -112,6 +112,11 @@ async function logoutController(req, res) {
         return res.status(400).json({ message: "No token found" })
     }
 
+    const isBlacklisted = await tokenBlacklistModel.findOne({ token })
+    if (isBlacklisted) {
+        return res.status(401).json({ message: "Unauthorized" })
+    }
+
     await tokenBlacklistModel.create({ token })
 
     res.clearCookie("token", {

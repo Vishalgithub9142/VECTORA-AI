@@ -1,38 +1,84 @@
-const { GoogleGenAI, Behavior } = require("@google/genai");
-const { z } = require('zod')
+const { GoogleGenAI, Type } = require("@google/genai");
 const puppeteer = require("puppeteer")
 
-const ai = new GoogleGenAI({
-    apiKey: process.env.GOOGLE_GENAI_API_KEY
-});
+function getAiClient() {
+    return new GoogleGenAI({
+        apiKey: process.env.GOOGLE_GENAI_API_KEY
+    })
+}
 
-const interviewReoprtScheme = z.object({
-
-    matchScore: z.number().describe("match score between resume and job description"),
-    technicalQuestion: z.array(z.object({
-        question: z.string().describe("The technical question can be asked in interview based on resume and job description"),
-        intention: z.string().describe("the intention of the interviewer behind asking this question or what the interviewer want to check"),
-        answer: z.string().describe("how to answer this question, what point to cover, what approach to take")
-    })).describe("Technical question that can be asked in interview based on resume and job description"),
-    behaviouralQuestion: z.array(z.object({
-        question: z.string().describe("The behavioural question can be asked in interview based on resume and job description"),
-        intention: z.string().describe("the intention of the interviewer behind asking this question or what the interviewer want to check"),
-        answer: z.string().describe("how to answer this question, what point to cover, what approach to take")
-    })).describe("Behavioural question that can be asked in interview based on resume and job description"),
-    skillGap: z.array(z.object({
-        skill: z.string().describe("The skill which candidate is lacking"),
-        severity: z.enum(["low", "medium", "high"]).describe("the severity of laking skill")
-    })).describe("Lkist of skill gaps in candidate based on resume and job description"),
-    preparationPlan: z.array(z.object({
-        day: z.number().describe("The day of preparation"),
-        focus: z.string().describe("The focus of preparation"),
-        task: z.array(z.string()).describe("The task to be done on that day")
-    })).describe("Preparation plan for the interview"),
-    title: z.string().describe("The title of the job fro which interview report is generated"),
-
-})
+const interviewReportSchema = {
+    type: Type.OBJECT,
+    properties: {
+        matchScore: {
+            type: Type.NUMBER,
+            description: "Match score (0 to 100) between resume and job description"
+        },
+        title: {
+            type: Type.STRING,
+            description: "The job title for which the interview report is generated"
+        },
+        technicalQuestion: {
+            type: Type.ARRAY,
+            description: "Technical questions that can be asked in interview based on resume and job description",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    question: { type: Type.STRING, description: "Technical question" },
+                    intention: { type: Type.STRING, description: "Intention of the interviewer behind asking this question" },
+                    answer: { type: Type.STRING, description: "How to answer this question" }
+                },
+                required: ["question", "intention", "answer"]
+            }
+        },
+        behaviouralQuestion: {
+            type: Type.ARRAY,
+            description: "Behavioural questions that can be asked in interview",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    question: { type: Type.STRING, description: "Behavioural question" },
+                    intention: { type: Type.STRING, description: "Intention of the interviewer" },
+                    answer: { type: Type.STRING, description: "How to answer this question" }
+                },
+                required: ["question", "intention", "answer"]
+            }
+        },
+        skillGap: {
+            type: Type.ARRAY,
+            description: "List of skill gaps in candidate based on resume and job description",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    skill: { type: Type.STRING, description: "The skill candidate is lacking" },
+                    severity: { type: Type.STRING, enum: ["low", "medium", "high"], description: "Severity of lacking skill" }
+                },
+                required: ["skill", "severity"]
+            }
+        },
+        preparationPlan: {
+            type: Type.ARRAY,
+            description: "Preparation plan for the interview",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    day: { type: Type.NUMBER, description: "The day of preparation" },
+                    focus: { type: Type.STRING, description: "The focus of preparation" },
+                    task: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "Tasks to be done on that day"
+                    }
+                },
+                required: ["day", "focus", "task"]
+            }
+        }
+    },
+    required: ["matchScore", "title", "technicalQuestion", "behaviouralQuestion", "skillGap", "preparationPlan"]
+}
 
 async function generateInterviewReport({ resume, selfDescription, jobDescription }) {
+    const ai = getAiClient()
 
     const prompt = `Generate the interview Report according to the information provided by user. 
     Resume: ${resume}
@@ -40,11 +86,11 @@ async function generateInterviewReport({ resume, selfDescription, jobDescription
     Job Description: ${jobDescription}`
 
     const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
             responseMimeType: "application/json",
-            responseJsonSchema: z.toJSONSchema(interviewReoprtScheme)
+            responseJsonSchema: interviewReportSchema
         }
     })
 
@@ -57,7 +103,8 @@ async function generatePdfFromHtml(htmlContent) {
     await page.setContent(htmlContent, { waitUntil: "networkidle0" })
 
     const pdfBuffer = await page.pdf({
-        format: "A4", margin: {
+        format: "A4",
+        margin: {
             top: "20mm",
             bottom: "20mm",
             left: "15mm",
@@ -71,10 +118,18 @@ async function generatePdfFromHtml(htmlContent) {
 }
 
 async function generateResumePdf({ resume, selfDescription, jobDescription }) {
+    const ai = getAiClient()
 
-    const resumePdfSchema = z.object({
-        html: z.string().describe("The HTML content of the resume which can be converted to PDF using any library like puppeteer")
-    })
+    const resumePdfSchema = {
+        type: Type.OBJECT,
+        properties: {
+            html: {
+                type: Type.STRING,
+                description: "The HTML content of the resume which can be converted to PDF using puppeteer"
+            }
+        },
+        required: ["html"]
+    }
 
     const prompt = `Generate resume for a candidate with the following details:
                         Resume: ${resume}
@@ -90,21 +145,18 @@ async function generateResumePdf({ resume, selfDescription, jobDescription }) {
                     `
 
     const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
             responseMimeType: "application/json",
-            responseJsonSchema: z.toJSONSchema(resumePdfSchema),
+            responseJsonSchema: resumePdfSchema,
         }
     })
 
-
     const jsonContent = JSON.parse(response.text)
-
     const pdfBuffer = await generatePdfFromHtml(jsonContent.html)
 
     return pdfBuffer
-
 }
 
 module.exports = { generateInterviewReport, generateResumePdf }
