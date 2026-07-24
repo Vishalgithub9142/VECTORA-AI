@@ -1,4 +1,5 @@
-const pdfParse = require('pdf-parse').default || require('pdf-parse')
+const pdfParseModule = require('pdf-parse');
+const pdfParse = pdfParseModule.default || pdfParseModule;
 const {generateInterviewReport, generateResumePdf} = require('../services/ai.service')
 const interviewReportModel = require('../models/interviewReport.model')
 

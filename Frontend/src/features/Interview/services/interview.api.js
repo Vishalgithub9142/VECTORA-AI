@@ -11,6 +11,10 @@ api.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+    // Don't set Content-Type for FormData - let browser handle it
+    if (config.data instanceof FormData) {
+        delete config.headers['Content-Type'];
+    }
     return config;
 });
 
@@ -24,7 +28,6 @@ export const generateInterviewReport = async ({ jobDescription, selfDescription,
     formData.append("selfDescription", selfDescription)
     formData.append("resume", resumeFile)
 
-    // Don't set Content-Type header for FormData - let axios/browser handle it
     const response = await api.post("/", formData)
 
     return response.data
