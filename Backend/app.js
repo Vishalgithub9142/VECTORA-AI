@@ -5,8 +5,10 @@ const cors = require('cors')
 const app = express();
 app.use(express.json())
 app.use(cookieParser())
+
 const allowedOrigins = [
     /^http:\/\/localhost(:\d+)?$/,
+    'https://vectora-ai-five.vercel.app',
     process.env.FRONTEND_URL,
 ].filter(Boolean)
 
