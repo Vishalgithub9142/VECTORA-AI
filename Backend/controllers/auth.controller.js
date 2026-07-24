@@ -39,7 +39,8 @@ async function registerUserController(req, res) {
     res.cookie("token", token, {
         httpOnly: true,
         secure: true,
-        sameSite: 'None'
+        sameSite: 'None',
+        path: '/'
     })
 
     res.status(201).json({
@@ -86,7 +87,8 @@ async function loginController(req, res) {
     res.cookie("token", token, {
         httpOnly: true,
         secure: true,
-        sameSite: 'None'
+        sameSite: 'None',
+        path: '/'
     })
 
     res.status(200).json({
@@ -113,7 +115,8 @@ async function logoutController(req, res) {
     res.clearCookie("token", {
         httpOnly: true,
         secure: true,
-        sameSite: 'None'
+        sameSite: 'None',
+        path: '/'
     })
 
     res.status(200).json({ message: "User logged out successfully" })
