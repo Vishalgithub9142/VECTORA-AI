@@ -4,23 +4,53 @@ const interviewReportModel = require('../models/interviewReport.model')
 
 async function generateInterviewReportController(req, res){
     try {
+        console.log('\n🚀 [INTERVIEW CONTROLLER] Starting interview report generation...')
+        
         if (!req.file) {
+            console.log('❌ [INTERVIEW CONTROLLER] No file received')
             return res.status(400).json({ message: "Resume file is required" })
         }
+        
+        console.log('✅ [INTERVIEW CONTROLLER] File received:', {
+            originalName: req.file.originalname,
+            size: req.file.size,
+            encoding: req.file.encoding
+        })
 
+        console.log('📄 [INTERVIEW CONTROLLER] Parsing PDF...')
         const data = await pdfParse(req.file.buffer)
+        console.log('✅ [INTERVIEW CONTROLLER] PDF parsed successfully. Text length:', data.text.length)
+        
         const { jobDescription , selfDescription } = req.body
 
         if (!jobDescription || !selfDescription) {
+            console.log('❌ [INTERVIEW CONTROLLER] Missing job description or self description')
             return res.status(400).json({ message: "Job description and self description are required" })
         }
+        
+        console.log('✅ [INTERVIEW CONTROLLER] All required fields present')
+        console.log('📝 [INTERVIEW CONTROLLER] Content lengths:', {
+            resumeLength: data.text.length,
+            jobDescriptionLength: jobDescription.length,
+            selfDescriptionLength: selfDescription.length
+        })
 
+        console.log('🤖 [INTERVIEW CONTROLLER] Calling AI service to generate report...')
         const interviewReportByAi = await generateInterviewReport({
             resume: data.text,
             jobDescription,
             selfDescription
         })
+        console.log('✅ [INTERVIEW CONTROLLER] AI report generated successfully')
+        console.log('📊 [INTERVIEW CONTROLLER] AI Response:', {
+            matchScore: interviewReportByAi.matchScore,
+            technicalQuestions: interviewReportByAi.technicalQuestion?.length || 0,
+            behavioralQuestions: interviewReportByAi.behaviouralQuestion?.length || 0,
+            skillGaps: interviewReportByAi.skillGap?.length || 0,
+            preparationDays: interviewReportByAi.preparationPlan?.length || 0
+        })
 
+        console.log('💾 [INTERVIEW CONTROLLER] Saving to database...')
         const interviewReport = await interviewReportModel.create({
             user: req.user.id,
             resume: data.text,
@@ -28,13 +58,18 @@ async function generateInterviewReportController(req, res){
             selfDescription,
             ...interviewReportByAi
         })
+        console.log('✅ [INTERVIEW CONTROLLER] Saved to database. Report ID:', interviewReport._id)
 
         res.status(201).json({
             message: "Interview report generated successfully",
             interviewReport
         })
+        console.log('✅ [INTERVIEW CONTROLLER] Response sent successfully\n')
     } catch (error) {
-        console.error("Error in generateInterviewReportController:", error)
+        console.error('❌ [INTERVIEW CONTROLLER] Error:', {
+            message: error.message,
+            stack: error.stack
+        })
         res.status(500).json({ 
             message: "Failed to generate interview report",
             error: error.message 
