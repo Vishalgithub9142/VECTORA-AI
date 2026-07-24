@@ -1,0 +1,24 @@
+import { useNavigate, Navigate } from "react-router";
+import { useAuth } from "../hooks/useAuth";
+
+import React from 'react'
+
+const Protected = ({children}) => {
+
+    const {loading,  user } = useAuth();
+    const navigate = useNavigate()
+        
+    if(loading){
+        return (<main><h1>LOADING..........</h1></main>)
+    }
+
+    if(!user){
+        return <Navigate to="/login" />
+    }
+
+  return (
+    <>{children}</>
+  )
+}
+
+export default Protected
