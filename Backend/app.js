@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 const logger = require('./logger');
 
 const app = express();
-app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());
