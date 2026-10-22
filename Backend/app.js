@@ -5,7 +5,6 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const logger = require('./logger');
-require('express-async-errors'); // patches express to handle async errors
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
