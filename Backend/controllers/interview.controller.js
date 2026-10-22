@@ -1,4 +1,5 @@
 const { PDFParse } = require('pdf-parse');
+const mongoose = require('mongoose');
 const {generateInterviewReport, generateResumePdf} = require('../services/ai.service')
 const interviewReportModel = require('../models/interviewReport.model')
 
@@ -10,6 +11,16 @@ async function generateInterviewReportController(req, res){
             console.log('❌ [INTERVIEW CONTROLLER] No file received')
             return res.status(400).json({ message: "Resume file is required" })
         }
+
+        if (req.file.buffer.subarray(0, 5).toString() !== '%PDF-') {
+            return res.status(400).json({ message: 'Uploaded file is not a valid PDF' })
+        }
+
+        const { jobDescription, selfDescription } = req.body
+        if (typeof jobDescription !== 'string' || typeof selfDescription !== 'string' ||
+            jobDescription.length > 20000 || selfDescription.length > 10000) {
+            return res.status(400).json({ message: 'Descriptions are missing or exceed the allowed length' })
+        }
         
         console.log('✅ [INTERVIEW CONTROLLER] File received:', {
             originalName: req.file.originalname,
@@ -20,14 +31,10 @@ async function generateInterviewReportController(req, res){
         console.log('📄 [INTERVIEW CONTROLLER] Parsing PDF...')
         const parser = new PDFParse({ data: req.file.buffer })
         const data = await parser.getText()
-        console.log('✅ [INTERVIEW CONTROLLER] PDF parsed successfully. Text length:', data.text.length)
-        
-        const { jobDescription , selfDescription } = req.body
-
-        if (!jobDescription || !selfDescription) {
-            console.log('❌ [INTERVIEW CONTROLLER] Missing job description or self description')
-            return res.status(400).json({ message: "Job description and self description are required" })
+        if (data.text.length > 50000) {
+            return res.status(400).json({ message: 'Resume text exceeds the allowed length' })
         }
+        console.log('✅ [INTERVIEW CONTROLLER] PDF parsed successfully. Text length:', data.text.length)
         
         console.log('✅ [INTERVIEW CONTROLLER] All required fields present')
         console.log('📝 [INTERVIEW CONTROLLER] Content lengths:', {
@@ -71,10 +78,7 @@ async function generateInterviewReportController(req, res){
             message: error.message,
             stack: error.stack
         })
-        res.status(500).json({ 
-            message: "Failed to generate interview report",
-            error: error.message 
-        })
+        res.status(500).json({ message: "Failed to generate interview report" })
     }
 }
 
@@ -82,7 +86,10 @@ async function generateInterviewReportController(req, res){
 async function getInterviewReportByIdController(req, res){
     try {
         const {interviewId} = req.params
-        const interviewReport = await interviewReportModel.findById(interviewId)
+        if (!mongoose.Types.ObjectId.isValid(interviewId)) {
+            return res.status(400).json({ message: 'Invalid report ID' })
+        }
+        const interviewReport = await interviewReportModel.findOne({ _id: interviewId, user: req.user.id })
         
         if(!interviewReport){
             return res.status(404).json({
@@ -96,10 +103,7 @@ async function getInterviewReportByIdController(req, res){
         })
     } catch (error) {
         console.error("Error in getInterviewReportByIdController:", error)
-        res.status(500).json({ 
-            message: "Failed to fetch interview report",
-            error: error.message 
-        })
+        res.status(500).json({ message: "Failed to fetch interview report" })
     }
 }
 
@@ -119,10 +123,7 @@ async function getAllInterviewReportsController(req, res) {
         })
     } catch (error) {
         console.error("Error in getAllInterviewReportsController:", error)
-        res.status(500).json({ 
-            message: "Failed to fetch interview reports",
-            error: error.message 
-        })
+        res.status(500).json({ message: "Failed to fetch interview reports" })
     }
 }
 
@@ -133,8 +134,11 @@ async function getAllInterviewReportsController(req, res) {
 async function generateResumePdfController(req, res) {
     try {
         const { interviewReportId } = req.params
+        if (!mongoose.Types.ObjectId.isValid(interviewReportId)) {
+            return res.status(400).json({ message: 'Invalid report ID' })
+        }
 
-        const interviewReport = await interviewReportModel.findById(interviewReportId)
+        const interviewReport = await interviewReportModel.findOne({ _id: interviewReportId, user: req.user.id })
 
         if (!interviewReport) {
             return res.status(404).json({
@@ -154,10 +158,7 @@ async function generateResumePdfController(req, res) {
         res.send(pdfBuffer)
     } catch (error) {
         console.error("Error in generateResumePdfController:", error)
-        res.status(500).json({ 
-            message: "Failed to generate resume PDF",
-            error: error.message 
-        })
+        res.status(500).json({ message: "Failed to generate resume PDF" })
     }
 }
 

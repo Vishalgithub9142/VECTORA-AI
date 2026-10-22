@@ -3,15 +3,15 @@ const multer = require('multer')
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
-        fileSize: 3 * 1024 * 1024  //3MB
+        fileSize: 3 * 1024 * 1024,
+        fieldSize: 20 * 1024,
+        fields: 2,
+        parts: 3
     },
     fileFilter: (req, file, cb) => {
-        console.log('📁 [FILE MIDDLEWARE] File received:', {
-            filename: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size
-        })
-        cb(null, true)
+        const isPdf = file.mimetype === 'application/pdf' && /\.pdf$/i.test(file.originalname)
+        const error = isPdf ? null : Object.assign(new Error('Only PDF files are accepted'), { status: 400 })
+        cb(error, isPdf)
     }
 })
 

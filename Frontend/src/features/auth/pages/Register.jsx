@@ -1,29 +1,40 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
-import { useState } from 'react';
-
 
 const Register = () => {
 
   const navigate = useNavigate()
-
-  const {handleRegister,loading} = useAuth();
+  const { handleRegister, loading } = useAuth();
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
 
-  const handleSubmit = async(e) => {
-    e.preventDefault();    
-    await handleRegister({username, email, password});
-    navigate("/home")
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    const result = await handleRegister({ username, email, password });
+    if (result.success) {
+      navigate("/home");
+    } else {
+      setError(result.message);
+    }
+  }
+
+  if (loading) {
+    return <main className='bg-[#252525] w-full h-screen flex items-center justify-center text-white'>Loading...</main>
   }
 
   return (
     <main className='bg-[#252525] w-full h-screen flex items-center justify-center'>
       <div className="form-container text-white p-5 m-0.5 rounded-2xl ">
         <h1 className='text-2xl text-center font-bold underline'>Register</h1>
+
+        {error && (
+          <p className="text-red-400 text-sm text-center mt-2 mb-1">{error}</p>
+        )}
 
         <form onSubmit={handleSubmit} className='flex flex-col gap-2'>
 
@@ -32,19 +43,22 @@ const Register = () => {
             <label htmlFor="username">Username</label>
             <input
               onChange={(e) => { setUsername(e.target.value) }}
-              type="text" id="username" className="pl-2 text-black " />
+              value={username}
+              type="text" id="username" className="pl-2 text-black" required />
 
             <label htmlFor="email">Email</label>
             <input
               onChange={(e) => { setEmail(e.target.value) }}
-              type="email" id="email" className="pl-2 text-black" />
+              value={email}
+              type="email" id="email" className="pl-2 text-black" required />
 
             <label htmlFor="password">Password</label>
             <input
               onChange={(e) => { setPassword(e.target.value) }}
-              type="password" id="password" className="pl-2 text-black" />
+              value={password}
+              type="password" id="password" className="pl-2 text-black" required />
 
-            <button type="submit" id="loginButton" className='active:scale-95 bg-pink-400 rounded-2xl p-1.5'>Register</button>
+            <button type="submit" id="registerButton" className='active:scale-95 bg-pink-400 rounded-2xl p-1.5'>Register</button>
 
           </div>
 

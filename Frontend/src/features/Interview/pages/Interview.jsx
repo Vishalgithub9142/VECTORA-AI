@@ -1,4 +1,4 @@
-import React, { useState , useEffect} from 'react'
+import React, { useState } from 'react'
 import { useInterview } from '../hooks/useInterview.js'
 import { useNavigate, useParams } from 'react-router'
 
@@ -194,9 +194,7 @@ const Interview = () => {
   const { report, loading, getReportById, getResumePdf } = useInterview()
   const { interviewId } = useParams()
 
-  useEffect(() => {
-    getReportById(interviewId)
-  }, [interviewId])
+
 
   
 
@@ -222,10 +220,7 @@ const Interview = () => {
       className="min-h-screen w-full flex flex-col"
       style={{ backgroundColor: '#0d1117', fontFamily: "'Inter', sans-serif" }}
     >
-      <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        rel="stylesheet"
-      />
+
 
       {/* ── Header ── */}
       <section className="text-center pt-10 pb-6 px-4">

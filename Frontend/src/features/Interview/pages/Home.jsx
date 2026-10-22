@@ -39,11 +39,7 @@ const Home = () => {
       className="min-h-screen w-full flex flex-col"
       style={{ backgroundColor: '#0d1117', fontFamily: "'Inter', sans-serif" }}
     >
-      {/* ── Google Font ── */}
-      <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        rel="stylesheet"
-      />
+
 
       {/* ── Page header ── */}
       <section className="text-center pt-10 pb-6 px-4">

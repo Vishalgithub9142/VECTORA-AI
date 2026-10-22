@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import { login, getMe } from "./services/auth.api"; 
+import { createContext, useState, useEffect } from "react";
+import { getMe } from "./services/auth.api";
 
 export const AuthContext = createContext();
 
@@ -10,20 +10,14 @@ export const AuthProvider = ({ children })=>{
 
     // Check if user is already logged in on app mount
     useEffect(() => {
+        localStorage.removeItem('authToken');
         const checkUser = async () => {
             try {
-                // First, restore token from localStorage if it exists
-                const storedToken = localStorage.getItem('authToken');
-                if (storedToken) {
-                    // Token is already available for the interceptor to use
-                }
-                
                 const userData = await getMe();
                 setUser(userData.user);
-            } catch (error) {
+            } catch {
                 // User not authenticated
                 console.log("No active session");
-                localStorage.removeItem('authToken');
             } finally {
                 setLoading(false);
             }

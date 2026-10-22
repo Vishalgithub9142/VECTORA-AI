@@ -72,7 +72,7 @@ const interviewReportSchema = new mongoose.Schema({
 
     jobDescription: {
         type: String,
-        require: [true, "Job description is required"]
+        required: [true, "Job description is required"]
     },
     resume: {
         type: String
@@ -91,7 +91,8 @@ const interviewReportSchema = new mongoose.Schema({
     preparationPlan: [preparationPlanSchema],
     user: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
+        ref: "User",
+        required: true
     },
     title: {
         type: String,

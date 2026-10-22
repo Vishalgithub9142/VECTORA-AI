@@ -22,16 +22,24 @@ const fs = require('fs')
 
 require('dotenv').config({ path: path.join(__dirname, '../.env') })
 
-// ── Point to a SEPARATE test database on the same Atlas cluster ──────────────
-// URI format: mongodb+srv://...mongodb.net/   (trailing slash, no DB name)
-const baseUri = process.env.MONGODB_URI.trim().replace(/\/$/, '')
-const TEST_DB_URI = `${baseUri}/vectora-test`
+const TEST_DB_URI = process.env.MONGODB_TEST_URI
+if (!TEST_DB_URI) {
+    throw new Error('MONGODB_TEST_URI must point to a disposable test database')
+}
+const testDatabaseName = new URL(TEST_DB_URI).pathname.replace(/^\/+/, '')
+if (!/(?:^|[-_])test(?:$|[-_])/i.test(testDatabaseName)) {
+    throw new Error('MONGODB_TEST_URI database name must include "test"')
+}
 
 const app = require('../app')
 const userModel = require('../models/user.model')
 const interviewReportModel = require('../models/interviewReport.model')
 const tokenBlacklistModel = require('../models/blacklist.model')
 const { USERS, INTERVIEW_REPORTS } = require('./fixtures/seed')
+
+function authCookie(response) {
+    return response.headers['set-cookie'][0].split(';')[0]
+}
 
 // ── DB lifecycle ─────────────────────────────────────────────────────────────
 beforeAll(async () => {
@@ -48,10 +56,10 @@ beforeAll(async () => {
 
     // Login once here — before any logout tests run — so the token is never blacklisted
     const loginRes = await request(app).post('/api/auth/login').send(ALICE)
-    aliceToken = loginRes.body.token
+    aliceCookie = authCookie(loginRes)
 
     console.log(`\n✅ Test DB seeded: ${USERS.length} users, ${INTERVIEW_REPORTS.length} reports`)
-    console.log(`✅ Alice token obtained: ${aliceToken ? 'YES' : 'FAILED'}\n`)
+    console.log(`✅ Alice cookie obtained: ${aliceCookie ? 'YES' : 'FAILED'}\n`)
 })
 
 afterAll(async () => {
@@ -66,7 +74,7 @@ afterAll(async () => {
 // ── Shared state ─────────────────────────────────────────────────────────────
 // Alice: pre-seeded with password "Password@123"
 const ALICE = { email: 'alice@test.com', password: 'Password@123' }
-let aliceToken = ''
+let aliceCookie = ''
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  AUTH ROUTES
@@ -77,13 +85,14 @@ describe('🔐 Auth Routes', () => {
     // ── Register ──────────────────────────────────────────────────────────────
     describe('POST /api/auth/register', () => {
 
-        it('registers a brand-new user and returns a JWT token', async () => {
+        it('registers a user and sets an HttpOnly auth cookie', async () => {
             const res = await request(app)
                 .post('/api/auth/register')
                 .send({ username: 'charlie_new', email: 'charlie@test.com', password: 'Pass@12345' })
 
             expect(res.statusCode).toBe(201)
-            expect(res.body).toHaveProperty('token')
+            expect(res.body).not.toHaveProperty('token')
+            expect(res.headers['set-cookie']).toBeDefined()
             expect(res.body.user).toMatchObject({ username: 'charlie_new', email: 'charlie@test.com' })
             expect(res.body.user).toHaveProperty('id')
         })
@@ -143,11 +152,11 @@ describe('🔐 Auth Routes', () => {
                 .send(ALICE)
 
             expect(res.statusCode).toBe(200)
-            expect(res.body).toHaveProperty('token')
+            expect(res.body).not.toHaveProperty('token')
             expect(res.body.user.email).toBe(ALICE.email)
             expect(res.headers['set-cookie']).toBeDefined()
 
-            aliceToken = res.body.token
+            aliceCookie = authCookie(res)
         })
 
         it('rejects wrong password', async () => {
@@ -193,7 +202,7 @@ describe('🔐 Auth Routes', () => {
         it('returns the authenticated user profile', async () => {
             const res = await request(app)
                 .get('/api/auth/get-me')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             expect(res.statusCode).toBe(200)
             expect(res.body.user).toMatchObject({ username: 'alice_dev', email: 'alice@test.com' })
@@ -208,36 +217,37 @@ describe('🔐 Auth Routes', () => {
         it('returns 401 for a malformed token', async () => {
             const res = await request(app)
                 .get('/api/auth/get-me')
-                .set('Authorization', 'Bearer this.is.not.valid')
+                .set('Cookie', 'token=this.is.not.valid')
 
             expect(res.statusCode).toBe(401)
         })
 
         it('returns 401 for a tampered token', async () => {
-            const tampered = aliceToken.slice(0, -5) + 'XXXXX'
+            const token = aliceCookie.slice('token='.length)
+            const tampered = token.slice(0, -5) + 'XXXXX'
             const res = await request(app)
                 .get('/api/auth/get-me')
-                .set('Authorization', `Bearer ${tampered}`)
+                .set('Cookie', `token=${tampered}`)
 
             expect(res.statusCode).toBe(401)
         })
     })
 
     // ── Logout ────────────────────────────────────────────────────────────────
-    describe('GET /api/auth/logout', () => {
+    describe('POST /api/auth/logout', () => {
 
         it('returns 400 with no cookie', async () => {
-            const res = await request(app).get('/api/auth/logout')
+            const res = await request(app).post('/api/auth/logout')
             expect(res.statusCode).toBe(400)
             expect(res.body.message).toBe('No token found')
         })
 
         it('logs out and clears the cookie', async () => {
             const loginRes = await request(app).post('/api/auth/login').send(ALICE)
-            const cookie = loginRes.headers['set-cookie']
+            const cookie = authCookie(loginRes)
 
             const res = await request(app)
-                .get('/api/auth/logout')
+                .post('/api/auth/logout')
                 .set('Cookie', cookie)
 
             expect(res.statusCode).toBe(200)
@@ -246,13 +256,13 @@ describe('🔐 Auth Routes', () => {
 
         it('blacklists the token so it cannot be reused', async () => {
             const loginRes = await request(app).post('/api/auth/login').send(ALICE)
-            const cookie = loginRes.headers['set-cookie']
+            const cookie = authCookie(loginRes)
 
             // First logout
-            await request(app).get('/api/auth/logout').set('Cookie', cookie)
+            await request(app).post('/api/auth/logout').set('Cookie', cookie)
 
             // Second logout with the same (now blacklisted) cookie
-            const res = await request(app).get('/api/auth/logout').set('Cookie', cookie)
+            const res = await request(app).post('/api/auth/logout').set('Cookie', cookie)
             expect(res.statusCode).toBe(401)
         })
     })
@@ -264,7 +274,7 @@ describe('🔐 Auth Routes', () => {
 
 describe('📋 Interview Routes', () => {
 
-    // aliceToken was already obtained in the outer beforeAll (before any logout tests)
+    // aliceCookie was obtained in the outer beforeAll (before any logout tests)
     // No need to re-login here — that would fail if previous tests blacklisted tokens
 
     // ── GET all reports ───────────────────────────────────────────────────────
@@ -273,7 +283,7 @@ describe('📋 Interview Routes', () => {
         it("returns only Alice's 2 seeded reports (not Bob's)", async () => {
             const res = await request(app)
                 .get('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             expect(res.statusCode).toBe(200)
             expect(Array.isArray(res.body.interviewReports)).toBe(true)
@@ -287,7 +297,7 @@ describe('📋 Interview Routes', () => {
         it('does not expose resume / selfDescription / jobDescription in list', async () => {
             const res = await request(app)
                 .get('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             const report = res.body.interviewReports[0]
             expect(report.resume).toBeUndefined()
@@ -299,11 +309,11 @@ describe('📋 Interview Routes', () => {
             const loginRes = await request(app)
                 .post('/api/auth/login')
                 .send({ email: 'charlie@test.com', password: 'Pass@12345' })
-            const charlieToken = loginRes.body.token
+            const charlieCookie = authCookie(loginRes)
 
             const res = await request(app)
                 .get('/api/interview/')
-                .set('Authorization', `Bearer ${charlieToken}`)
+                .set('Cookie', charlieCookie)
 
             expect(res.statusCode).toBe(200)
             expect(res.body.interviewReports).toHaveLength(0)
@@ -320,7 +330,7 @@ describe('📋 Interview Routes', () => {
         it('returns full report with all nested fields for seeded ID', async () => {
             const res = await request(app)
                 .get('/api/interview/report/cccccccccccccccccccccccc')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             expect(res.statusCode).toBe(200)
             const r = res.body.interviewReport
@@ -335,7 +345,7 @@ describe('📋 Interview Routes', () => {
         it('returns correct matchScore and skillGap for second report', async () => {
             const res = await request(app)
                 .get('/api/interview/report/dddddddddddddddddddddddd')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             expect(res.statusCode).toBe(200)
             expect(res.body.interviewReport.matchScore).toBe(91)
@@ -346,18 +356,26 @@ describe('📋 Interview Routes', () => {
             const fakeId = new mongoose.Types.ObjectId().toString()
             const res = await request(app)
                 .get(`/api/interview/report/${fakeId}`)
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             expect(res.statusCode).toBe(404)
             expect(res.body.message).toBe('Interview report not found')
         })
 
-        it('returns 500 for an invalid ObjectId format', async () => {
+        it('returns 400 for an invalid ObjectId format', async () => {
             const res = await request(app)
                 .get('/api/interview/report/not-valid')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
-            expect(res.statusCode).toBe(500)
+            expect(res.statusCode).toBe(400)
+        })
+
+        it('does not expose another user\'s report', async () => {
+            const res = await request(app)
+                .get('/api/interview/report/eeeeeeeeeeeeeeeeeeeeeeee')
+                .set('Cookie', aliceCookie)
+
+            expect(res.statusCode).toBe(404)
         })
 
         it('returns 401 when unauthenticated', async () => {
@@ -390,7 +408,7 @@ describe('📋 Interview Routes', () => {
         it('generates a full interview report E2E (AI mocked) and saves to DB', async () => {
             const res = await request(app)
                 .post('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
                 .field('jobDescription', 'Senior Frontend Engineer with React & TypeScript.')
                 .field('selfDescription', 'Frontend dev with 4 years React experience.')
                 .attach('resume', SAMPLE_PDF, { filename: 'resume.pdf', contentType: 'application/pdf' })
@@ -412,14 +430,14 @@ describe('📋 Interview Routes', () => {
             // Generate one more
             await request(app)
                 .post('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
                 .field('jobDescription', 'Backend Node.js role.')
                 .field('selfDescription', 'Node.js backend engineer.')
                 .attach('resume', SAMPLE_PDF, { filename: 'resume.pdf', contentType: 'application/pdf' })
 
             const res = await request(app)
                 .get('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             // 2 seeded + 2 generated = 4
             expect(res.body.interviewReports.length).toBeGreaterThanOrEqual(3)
@@ -428,7 +446,7 @@ describe('📋 Interview Routes', () => {
         it('rejects with 400 when no resume file', async () => {
             const res = await request(app)
                 .post('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
                 .field('jobDescription', 'Some Job')
                 .field('selfDescription', 'Some Desc')
 
@@ -439,7 +457,7 @@ describe('📋 Interview Routes', () => {
         it('rejects with 400 when jobDescription is missing', async () => {
             const res = await request(app)
                 .post('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
                 .field('selfDescription', 'Some Desc')
                 .attach('resume', SAMPLE_PDF, { filename: 'resume.pdf', contentType: 'application/pdf' })
 
@@ -450,7 +468,7 @@ describe('📋 Interview Routes', () => {
         it('rejects with 400 when selfDescription is missing', async () => {
             const res = await request(app)
                 .post('/api/interview/')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
                 .field('jobDescription', 'Some Job')
                 .attach('resume', SAMPLE_PDF, { filename: 'resume.pdf', contentType: 'application/pdf' })
 
@@ -469,7 +487,7 @@ describe('📋 Interview Routes', () => {
         it('generates and returns a PDF buffer with correct headers', async () => {
             const res = await request(app)
                 .post('/api/interview/resume/pdf/cccccccccccccccccccccccc')
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
                 .buffer(true)
                 .parse((res, cb) => {
                     const chunks = []
@@ -486,10 +504,18 @@ describe('📋 Interview Routes', () => {
             const fakeId = new mongoose.Types.ObjectId().toString()
             const res = await request(app)
                 .post(`/api/interview/resume/pdf/${fakeId}`)
-                .set('Authorization', `Bearer ${aliceToken}`)
+                .set('Cookie', aliceCookie)
 
             expect(res.statusCode).toBe(404)
             expect(res.body.message).toBe('Interview report not found.')
+        })
+
+        it('does not generate a PDF for another user\'s report', async () => {
+            const res = await request(app)
+                .post('/api/interview/resume/pdf/eeeeeeeeeeeeeeeeeeeeeeee')
+                .set('Cookie', aliceCookie)
+
+            expect(res.statusCode).toBe(404)
         })
 
         it('returns 401 when unauthenticated', async () => {
